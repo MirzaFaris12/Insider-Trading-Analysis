@@ -17,7 +17,10 @@ days_back = st.sidebar.slider("Lookback window (days)", 1, 365, value=5 if not t
 # Load data
 scraper = InsiderScraper()
 with st.spinner("🔄 Fetching insider trading data..."):
-    df = scraper.fetch(ticker=ticker_input, days_back=days_back)
+    if ticker_input:
+        df = scraper.fetch(ticker=ticker_input, days_back=days_back)
+    else:
+        df = scraper.fetch(days_back=days_back)
 
 # Format numeric columns
 def format_numeric_columns(df):
