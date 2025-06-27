@@ -69,7 +69,7 @@ if search:
     st.subheader(f"🔎 Search results for '{search}'")
     st.dataframe(df, use_container_width=True)
 else:
-    st.subheader("🔥 Top Insider Trades (by value)")
+    st.subheader("Top Insider Trades (by value)")
     top_df = df.copy()
     if "Value" in top_df.columns:
         top_df["Value"] = top_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
