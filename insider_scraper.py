@@ -48,7 +48,7 @@ class InsiderScraper:
             return df
 
         try:
-            df[value_col] = df[value_col].replace('[\$,]', '', regex=True).astype(float)
+            df[value_col] = df[value_col].replace('[\\$,]', '', regex=True).astype(float)
             df[qty_col] = df[qty_col].str.replace(",", "").astype(float)
             df = df[df[value_col] >= self.min_transaction_value]
             df = df[df[qty_col] >= self.min_shares]
