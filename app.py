@@ -9,20 +9,12 @@ st.set_page_config(page_title="Insider Trading Tracker", layout="wide")
 st.title("📊 Insider Trading Tracker")
 st.markdown("Track insider trades from [OpenInsider](http://openinsider.com). Uses real-time SEC Form 4 data.")
 
-# Sidebar hybrid controls
-st.sidebar.header("🔍 Search Options")
-ticker_input = st.sidebar.text_input("Enter a ticker (optional)", "").upper()
-days_back = st.sidebar.slider("Lookback window (days)", 1, 365, value=5 if not ticker_input else 180)
-
 # Load data
 scraper = InsiderScraper()
 with st.spinner("🔄 Fetching insider trading data..."):
-    if ticker_input:
-        df = scraper.fetch(ticker=ticker_input, days_back=days_back)
-    else:
-        df = scraper.fetch(days_back=days_back)
+    df = scraper.fetch()
 
-# Format numeric columns
+# Format numeric columns safely
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
@@ -37,22 +29,26 @@ def format_numeric_columns(df):
 
 df = format_numeric_columns(df)
 
-# Sidebar filter inside results
-search = st.sidebar.text_input("🔎 Filter results (company or ticker):")
+# Sidebar: search filter
+st.sidebar.header("🔍 Filter Options")
+search = st.sidebar.text_input("Search by Company or Ticker:")
 if search:
+    # Dynamically find the company column
     company_col = next((col for col in df.columns if "Company" in col), None)
+
     if company_col and "Ticker" in df.columns:
         df = df[
-            df["Ticker"].astype(str).str.contains(search, case=False) |
-            df[company_col].astype(str).str.contains(search, case=False)
-        ]
+        df["Ticker"].astype(str).str.contains(search, case=False) |
+        df[company_col].astype(str).str.contains(search, case=False)
+    ]
     else:
-        st.warning("⚠️ Filtering failed – missing 'Company' or 'Ticker' column.")
+        st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
+
 
 # Timestamp
-st.caption(f"🕒 Data retrieved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Column explanations
+# Tooltip explanation
 with st.expander("ℹ️ What do these columns mean?"):
     st.markdown("""
 - **Filing Date**: When the insider trade was reported to the SEC.
@@ -69,38 +65,32 @@ with st.expander("ℹ️ What do these columns mean?"):
 - **Value**: Total value of the trade in USD.
 """)
 
-# Table display logic
-if df.empty:
-    st.warning("No insider trades found.")
-else:
-    if ticker_input:
-        st.subheader(f"📄 Insider Trades for {ticker_input} (last {days_back} days)")
-    elif search:
-        st.subheader(f"🔎 Search results for '{search}'")
-    else:
-        st.subheader("🔥 Top Recent Insider Trades")
+# Main table
+st.dataframe(df, use_container_width=True)
 
-    st.dataframe(df, use_container_width=True)
-
-# Chart for top trades
+# Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
+
+    # Clean Value
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
 
+    # Attempt to detect expected columns safely
     col_map = {
         "company": next((col for col in chart_df.columns if "Company" in col), None),
         "insider": next((col for col in chart_df.columns if "Insider" in col), None),
         "ticker": next((col for col in chart_df.columns if "Ticker" in col), None),
         "type": next((col for col in chart_df.columns if "Type" in col), None),
         "qty": next((col for col in chart_df.columns if "Qty" in col), None),
-        "value": "Value"
+        "value": "Value"  # Already used above
     }
 
     if None in col_map.values():
-        st.warning("⚠️ Chart cannot be displayed due to missing columns.")
+        st.warning("⚠️ One or more chart-required columns are missing. Chart will not render.")
     else:
+        # Format for Altair
         chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
         for col in col_map.values():
             chart_df[col] = chart_df[col].astype(str).fillna("")
@@ -123,11 +113,10 @@ if "Value" in df.columns:
                 height=400
             )
             st.altair_chart(top_chart, use_container_width=True)
+
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
 
-# Download button
-st.download_button("📥 Download CSV", df.to_csv(index=False), "insider_trades.csv")
 
 
 
