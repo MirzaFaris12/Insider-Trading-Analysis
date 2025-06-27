@@ -19,7 +19,18 @@ if df.empty:
     st.warning("⚠️ No insider trades found in the past day.")
     st.stop()
 
-# Format numeric columns safely
+# Remove X column if present
+if "X" in df.columns:
+    df = df.drop(columns=["X"])
+
+# Add SEC Form 4 clickable link if available
+if "Form 4 Link" in df.columns:
+    df["SEC Filing"] = df["Form 4 Link"].apply(
+        lambda url: f"[View Filing]({url})" if pd.notna(url) else ""
+    )
+    df.drop(columns=["Form 4 Link"], inplace=True)
+
+# Format numeric columns
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
@@ -34,25 +45,18 @@ def format_numeric_columns(df):
 
 df = format_numeric_columns(df)
 
-if "X" in df.columns:
-    df = df.drop(columns=["X"])
-
-
 # Sidebar: search filter
 st.sidebar.header("🔍 Filter Options")
 search = st.sidebar.text_input("Search by Company or Ticker:")
 if search:
-    # Dynamically find the company column
     company_col = next((col for col in df.columns if "Company" in col), None)
-
     if company_col and "Ticker" in df.columns:
         df = df[
-        df["Ticker"].astype(str).str.contains(search, case=False) |
-        df[company_col].astype(str).str.contains(search, case=False)
-    ]
+            df["Ticker"].astype(str).str.contains(search, case=False) |
+            df[company_col].astype(str).str.contains(search, case=False)
+        ]
     else:
         st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
-
 
 # Timestamp
 st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -72,34 +76,31 @@ with st.expander("ℹ️ What do these columns mean?"):
 - **Owned**: Insider’s total holdings after the trade.
 - **ΔOwn**: Ownership percentage change.
 - **Value**: Total value of the trade in USD.
+- **SEC Filing**: Link to the original SEC Form 4 filing.
 """)
 
-# Main table
+# Main Table
 st.dataframe(df, use_container_width=True)
 
 # Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
-
-    # Clean Value
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
 
-    # Attempt to detect expected columns safely
     col_map = {
         "company": next((col for col in chart_df.columns if "Company" in col), None),
         "insider": next((col for col in chart_df.columns if "Insider" in col), None),
         "ticker": next((col for col in chart_df.columns if "Ticker" in col), None),
         "type": next((col for col in chart_df.columns if "Type" in col), None),
         "qty": next((col for col in chart_df.columns if "Qty" in col), None),
-        "value": "Value"  # Already used above
+        "value": "Value"
     }
 
     if None in col_map.values():
         st.warning("⚠️ One or more chart-required columns are missing. Chart will not render.")
     else:
-        # Format for Altair
         chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
         for col in col_map.values():
             chart_df[col] = chart_df[col].astype(str).fillna("")
