@@ -62,33 +62,40 @@ st.dataframe(df, use_container_width=True)
 if "Value" in df.columns:
     chart_df = df.copy()
 
-    # Clean and convert Value
+    # Convert Value to numeric
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
 
-    # Sanitize string fields to prevent Altair crash
-    for col in ["Company Name", "Ticker", "Insider Name", "Trade Type", "Qty", "Value"]:
-        if col in chart_df.columns:
-            chart_df[col] = chart_df[col].astype(str).fillna("")
+    # Try to detect actual company name column
+    company_col = next((col for col in chart_df.columns if "Company" in col), None)
 
-    chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
+    if not company_col:
+        st.warning("⚠️ Could not find a 'Company Name' column for chart display.")
+    else:
+        # Prepare chart data
+        chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
 
-    try:
-        top_chart = alt.Chart(chart_df).mark_bar().encode(
-            x=alt.X('Company Name:N', sort='-y'),
-            y='Value (USD):Q',
-            color='Ticker:N',
-            tooltip=['Company Name', 'Insider Name', 'Trade Type', 'Qty', 'Value']
-        ).properties(
-            title='Top 10 Insider Trades by Value',
-            width=800,
-            height=400
-        )
+        # Convert to string to avoid Altair issues
+        for col in [company_col, "Ticker", "Insider Name", "Trade Type", "Qty", "Value"]:
+            if col in chart_df.columns:
+                chart_df[col] = chart_df[col].astype(str).fillna("")
 
-        st.altair_chart(top_chart, use_container_width=True)
+        try:
+            top_chart = alt.Chart(chart_df).mark_bar().encode(
+                x=alt.X(f'{company_col}:N', sort='-y'),
+                y='Value (USD):Q',
+                color='Ticker:N',
+                tooltip=[company_col, 'Insider Name', 'Trade Type', 'Qty', 'Value']
+            ).properties(
+                title='Top 10 Insider Trades by Value',
+                width=800,
+                height=400
+            )
+            st.altair_chart(top_chart, use_container_width=True)
 
-    except Exception as e:
-        st.error(f"📉 Chart rendering failed: {e}")
+        except Exception as e:
+            st.error(f"📉 Chart rendering failed: {e}")
+
 
 
