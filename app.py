@@ -34,16 +34,15 @@ st.sidebar.header("🔍 Filter Options")
 search = st.sidebar.text_input("Search by Company or Ticker:")
 if search:
     # Dynamically find the company column
-company_col = next((col for col in df.columns if "Company" in col), None)
+    company_col = next((col for col in df.columns if "Company" in col), None)
 
-if company_col and "Ticker" in df.columns:
-    df = df[
-        df["Ticker"].astype(str).str.contains(search, case=False) |
-        df[company_col].astype(str).str.contains(search, case=False)
-    ]
-else:
-    st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
-
+    if company_col and "Ticker" in df.columns:
+        df = df[
+            df["Ticker"].astype(str).str.contains(search, case=False) |
+            df[company_col].astype(str).str.contains(search, case=False)
+        ]
+    else:
+        st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
 
 # Timestamp
 st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
