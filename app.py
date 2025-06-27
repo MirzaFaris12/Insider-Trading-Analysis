@@ -14,6 +14,11 @@ scraper = InsiderScraper()
 with st.spinner("🔄 Fetching insider trading data..."):
     df = scraper.fetch()
 
+# If no data is found
+if df.empty:
+    st.warning("⚠️ No insider trades found in the past day.")
+    st.stop()
+
 # Format numeric columns safely
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
