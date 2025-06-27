@@ -18,10 +18,19 @@ with st.spinner("🔄 Fetching insider trading data..."):
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
-            df[col] = df[col].apply(lambda x: f"{int(float(x)):,}" if x else x)
+            bad_values = []
+            def safe_format(x):
+                try:
+                    x = str(x).replace(",", "").replace("$", "")
+                    return f"{int(float(x)):,}"
+                except:
+                    bad_values.append(x)
+                    return x
+            df[col] = df[col].apply(safe_format)
+            if bad_values:
+                print(f"⚠️ Non-numeric values in '{col}':", set(bad_values))
     return df
 
-df = format_numeric_columns(df)
 
 # Sidebar filter
 st.sidebar.header("🔎 Filter Options")
