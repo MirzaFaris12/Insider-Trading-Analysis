@@ -7,12 +7,12 @@ import yfinance as yf
 
 # Setup
 st.set_page_config(page_title="Insider Trading Tracker", layout="wide")
-st.title("📊 Insider Trading Tracker")
+st.title("\U0001F4CA Insider Trading Tracker")
 st.markdown("Track insider trades from [OpenInsider](http://openinsider.com). Uses real-time SEC Form 4 data.")
 
 # Load data
 scraper = InsiderScraper()
-with st.spinner("🔄 Fetching insider trading data..."):
+with st.spinner("\U0001F504 Fetching insider trading data..."):
     df = scraper.fetch()
 
 # If no data is found
@@ -52,7 +52,7 @@ if "Ticker" in df.columns and "Price" in df.columns:
     df["Price Change (%)"] = ((df["Current Price"] - df["Price"]) / df["Price"] * 100).round(2)
 
 # Sidebar: search filter
-st.sidebar.header("🔍 Filter Options")
+st.sidebar.header("\U0001F50D Filter Options")
 search = st.sidebar.text_input("Search by Company or Ticker:")
 if search:
     company_col = next((col for col in df.columns if "Company" in col), None)
@@ -65,31 +65,24 @@ if search:
         st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
 
 # --- Smart Money Tracker ---
-with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
-
+with st.expander("\U0001F9E0 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
     if all(col in df.columns for col in ["Insider Name", "Trade Type", "Price", "Ticker"]):
-        smart_df = df[df["Trade Type"] == "P"].copy()
+        smart_df = df[df["Trade Type"].str.startswith("P")].copy()
 
-        # Clean price and filter invalid
-        smart_df["Price"] = smart_df["Price"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
-        smart_df["Price"] = pd.to_numeric(smart_df["Price"], errors='coerce')
+        smart_df["Price"] = pd.to_numeric(smart_df["Price"].replace('[\$,]', '', regex=True).replace(',', '', regex=True), errors='coerce')
         smart_df = smart_df.dropna(subset=["Price", "Ticker", "Insider Name"])
-        
-        # Fetch current prices
-        import yfinance as yf
+
         tickers = smart_df["Ticker"].unique().tolist()
         current_prices = {}
-
         for ticker in tickers:
             try:
                 stock = yf.Ticker(ticker)
-                current_price = stock.history(period="1d")["Close"]
-                if not current_price.empty:
-                    current_prices[ticker] = current_price.iloc[-1]
+                hist = stock.history(period="1d")
+                if not hist.empty:
+                    current_prices[ticker] = hist["Close"].iloc[-1]
             except:
                 continue
 
-        # Compute gain %
         def compute_gain(row):
             current = current_prices.get(row["Ticker"], None)
             if current is None or row["Price"] <= 0:
@@ -99,7 +92,6 @@ with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
         smart_df["Gain (%)"] = smart_df.apply(compute_gain, axis=1)
         smart_df = smart_df.dropna(subset=["Gain (%)"])
 
-        # Rank insiders
         leaderboard = smart_df.groupby("Insider Name")["Gain (%)"].mean().sort_values(ascending=False).head(10)
         st.dataframe(leaderboard.reset_index().rename(columns={"Gain (%)": "Avg Gain (%)"}), use_container_width=True)
     else:
@@ -134,7 +126,6 @@ st.dataframe(df, use_container_width=True)
 # Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
-
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
@@ -176,6 +167,7 @@ if "Value" in df.columns:
 
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
+
 
 
 
