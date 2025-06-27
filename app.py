@@ -61,23 +61,34 @@ st.dataframe(df, use_container_width=True)
 # Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
+
+    # Clean and convert Value
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
+
+    # Sanitize string fields to prevent Altair crash
+    for col in ["Company Name", "Ticker", "Insider Name", "Trade Type", "Qty", "Value"]:
+        if col in chart_df.columns:
+            chart_df[col] = chart_df[col].astype(str).fillna("")
+
     chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
 
-    top_chart = alt.Chart(chart_df).mark_bar().encode(
-        x=alt.X('Company Name:N', sort='-y'),
-        y='Value (USD):Q',
-        color='Ticker:N',
-        tooltip=['Company Name', 'Insider Name', 'Trade Type', 'Qty', 'Value']
-    ).properties(
-        title='Top 10 Insider Trades by Value',
-        width=800,
-        height=400
-    )
-    st.altair_chart(top_chart, use_container_width=True)
+    try:
+        top_chart = alt.Chart(chart_df).mark_bar().encode(
+            x=alt.X('Company Name:N', sort='-y'),
+            y='Value (USD):Q',
+            color='Ticker:N',
+            tooltip=['Company Name', 'Insider Name', 'Trade Type', 'Qty', 'Value']
+        ).properties(
+            title='Top 10 Insider Trades by Value',
+            width=800,
+            height=400
+        )
 
-# Download button
-st.download_button("📥 Download CSV", df.to_csv(index=False), "insider_trades.csv")
+        st.altair_chart(top_chart, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"📉 Chart rendering failed: {e}")
+
 
