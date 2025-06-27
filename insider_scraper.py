@@ -15,13 +15,22 @@ class InsiderScraper:
             "pl": "",
             "ph": "",
             "fd": days_back,
-            "td": "0",  # today
-            "nop": "200"  # max per page (limited by site)
+            "td": "0",
+            "nop": "200"
         }
-        response = requests.get(self.base_url, params=params)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+
+        try:
+            response = requests.get(self.base_url, params=params, headers=headers, timeout=10)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print("Connection error:", e)
+            return pd.DataFrame()
+
         soup = BeautifulSoup(response.content, "html.parser")
         table = soup.find("table", {"class": "tinytable"})
-
         if not table:
             return pd.DataFrame()
 
