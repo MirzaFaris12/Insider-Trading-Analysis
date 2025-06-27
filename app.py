@@ -7,70 +7,70 @@ import altair as alt
 # Setup
 st.set_page_config(page_title="Insider Trading Tracker", layout="wide")
 st.title("📊 Insider Trading Tracker")
-st.markdown("Monitor recent insider trades reported to the SEC using data from [OpenInsider](http://openinsider.com).")
+st.markdown("Track insider trades from [OpenInsider](http://openinsider.com). Uses real-time SEC Form 4 data.")
 
 # Load data
 scraper = InsiderScraper()
 with st.spinner("🔄 Fetching insider trading data..."):
     df = scraper.fetch()
 
-# Format numbers
+# Format numeric columns safely
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
-            bad_values = []
             def safe_format(x):
                 try:
                     x = str(x).replace(",", "").replace("$", "")
                     return f"{int(float(x)):,}"
                 except:
-                    bad_values.append(x)
                     return x
             df[col] = df[col].apply(safe_format)
-            if bad_values:
-                print(f"⚠️ Non-numeric values in '{col}':", set(bad_values))
     return df
 
+df = format_numeric_columns(df)
 
-# Sidebar filter
-st.sidebar.header("🔎 Filter Options")
+# Sidebar: search filter
+st.sidebar.header("🔍 Filter Options")
 search = st.sidebar.text_input("Search by Company or Ticker:")
-
 if search:
     df = df[df["Ticker"].str.contains(search, case=False) | df["Company Name"].str.contains(search, case=False)]
 
 # Timestamp
 st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Table tooltip help
+# Tooltip explanation
 with st.expander("ℹ️ What do these columns mean?"):
     st.markdown("""
 - **Filing Date**: When the insider trade was reported to the SEC.
-- **Trade Date**: When the trade actually happened.
-- **Ticker**: Stock symbol.
-- **Company Name**: Full company name.
-- **Insider Name**: Person making the trade (exec, director, etc).
-- **Title**: Role of insider (e.g., Director, CEO, 10% Owner).
-- **Trade Type**: Type of transaction (P = Purchase, S = Sale).
+- **Trade Date**: When the trade actually occurred.
+- **Ticker**: Stock symbol of the company.
+- **Company Name**: Full name of the company.
+- **Insider Name**: Person who made the trade.
+- **Title**: Role of the insider (e.g., Director, CEO, 10% Owner).
+- **Trade Type**: P = Purchase, S = Sale.
 - **Price**: Price per share.
 - **Qty**: Number of shares traded.
-- **Owned**: Total shares the insider owns after the trade.
-- **ΔOwn**: Change in ownership percentage.
+- **Owned**: Insider’s total holdings after the trade.
+- **ΔOwn**: Ownership percentage change.
 - **Value**: Total value of the trade in USD.
 """)
 
-# Data table
+# Main table
 st.dataframe(df, use_container_width=True)
 
-# Chart: Top trades by value
+# Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
-    chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).astype(float)
-    top_chart = alt.Chart(chart_df.head(10)).mark_bar().encode(
+    chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
+    chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
+    chart_df = chart_df.dropna(subset=["Value (USD)"])
+    chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
+
+    top_chart = alt.Chart(chart_df).mark_bar().encode(
         x=alt.X('Company Name:N', sort='-y'),
         y='Value (USD):Q',
         color='Ticker:N',
-        tooltip=['Insider Name', 'Trade Type', 'Qty', 'Value']
+        tooltip=['Company Name', 'Insider Name', 'Trade Type', 'Qty', 'Value']
     ).properties(
         title='Top 10 Insider Trades by Value',
         width=800,
@@ -78,5 +78,6 @@ if "Value" in df.columns:
     )
     st.altair_chart(top_chart, use_container_width=True)
 
-# Download
+# Download button
 st.download_button("📥 Download CSV", df.to_csv(index=False), "insider_trades.csv")
+
