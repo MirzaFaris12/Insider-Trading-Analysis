@@ -62,31 +62,41 @@ st.dataframe(df, use_container_width=True)
 if "Value" in df.columns:
     chart_df = df.copy()
 
-    # Convert Value to numeric
+    # Clean Value
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
 
-    # Try to detect actual company name column
-    company_col = next((col for col in chart_df.columns if "Company" in col), None)
+    # Attempt to detect expected columns safely
+    col_map = {
+        "company": next((col for col in chart_df.columns if "Company" in col), None),
+        "insider": next((col for col in chart_df.columns if "Insider" in col), None),
+        "ticker": next((col for col in chart_df.columns if "Ticker" in col), None),
+        "type": next((col for col in chart_df.columns if "Type" in col), None),
+        "qty": next((col for col in chart_df.columns if "Qty" in col), None),
+        "value": "Value"  # Already used above
+    }
 
-    if not company_col:
-        st.warning("⚠️ Could not find a 'Company Name' column for chart display.")
+    if None in col_map.values():
+        st.warning("⚠️ One or more chart-required columns are missing. Chart will not render.")
     else:
-        # Prepare chart data
+        # Format for Altair
         chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
-
-        # Convert to string to avoid Altair issues
-        for col in [company_col, "Ticker", "Insider Name", "Trade Type", "Qty", "Value"]:
-            if col in chart_df.columns:
-                chart_df[col] = chart_df[col].astype(str).fillna("")
+        for col in col_map.values():
+            chart_df[col] = chart_df[col].astype(str).fillna("")
 
         try:
             top_chart = alt.Chart(chart_df).mark_bar().encode(
-                x=alt.X(f'{company_col}:N', sort='-y'),
+                x=alt.X(f'{col_map["company"]}:N', sort='-y'),
                 y='Value (USD):Q',
-                color='Ticker:N',
-                tooltip=[company_col, 'Insider Name', 'Trade Type', 'Qty', 'Value']
+                color=f'{col_map["ticker"]}:N',
+                tooltip=[
+                    col_map["company"],
+                    col_map["insider"],
+                    col_map["type"],
+                    col_map["qty"],
+                    col_map["value"]
+                ]
             ).properties(
                 title='Top 10 Insider Trades by Value',
                 width=800,
@@ -96,6 +106,7 @@ if "Value" in df.columns:
 
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
+
 
 
 
