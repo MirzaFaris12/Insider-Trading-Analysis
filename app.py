@@ -34,6 +34,10 @@ def format_numeric_columns(df):
 
 df = format_numeric_columns(df)
 
+if "X" in df.columns:
+    df = df.drop(columns=["X"])
+
+
 # Sidebar: search filter
 st.sidebar.header("🔍 Filter Options")
 search = st.sidebar.text_input("Search by Company or Ticker:")
