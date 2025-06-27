@@ -4,7 +4,8 @@ from bs4 import BeautifulSoup
 
 class InsiderScraper:
     def __init__(self, min_transaction_value=10000, min_shares=1000):
-        self.url = "http://openinsider.com/screener?s=&o=&pl=&ph=&ll=&lh=&fd=1&td=0&sic1=&sic2=&t=&ql=&qh=&o1=0&o2=0&nop=50"
+        self.base_url = "http://openinsider.com"
+        self.url = f"{self.base_url}/screener?s=&o=&pl=&ph=&ll=&lh=&fd=1&td=0&sic1=&sic2=&t=&ql=&qh=&o1=0&o2=0&nop=50"
         self.min_transaction_value = min_transaction_value
         self.min_shares = min_shares
 
@@ -17,28 +18,34 @@ class InsiderScraper:
             raise ValueError("Could not find data table on OpenInsider.")
 
         headers = [th.text.strip() for th in table.find_all("th")]
-        print("DEBUG: Headers found →", headers)  # Optional: log headers
-
         data = []
+
         for row in table.find_all("tr")[1:]:
             cols = row.find_all("td")
             if len(cols) != len(headers):
                 continue
+
             record = [td.text.strip() for td in cols]
+
+            # Extract Form 4 link from <a> tag in the first column
+            a_tag = cols[0].find("a")
+            form4_link = f"{self.base_url}{a_tag['href']}" if a_tag and 'href' in a_tag.attrs else None
+            record.append(form4_link)
+
             data.append(record)
 
+        headers.append("Form 4 Link")
         df = pd.DataFrame(data, columns=headers)
         df = self.clean_data(df)
         return df
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Dynamically find column names
         value_col = next((col for col in df.columns if "Value" in col), None)
         qty_col = next((col for col in df.columns if "Qty" in col or "Shares" in col), None)
 
         if not value_col or not qty_col:
             print("DEBUG: Column names not found.")
-            return df  # return raw df as fallback
+            return df
 
         try:
             df[value_col] = df[value_col].replace('[\$,]', '', regex=True).astype(float)
