@@ -3,6 +3,7 @@ from insider_scraper import InsiderScraper
 import pandas as pd
 from datetime import datetime
 import altair as alt
+import yfinance as yf
 
 # Setup
 st.set_page_config(page_title="Insider Trading Tracker", layout="wide")
@@ -19,18 +20,7 @@ if df.empty:
     st.warning("⚠️ No insider trades found in the past day.")
     st.stop()
 
-# Remove X column if present
-if "X" in df.columns:
-    df = df.drop(columns=["X"])
-
-# Add SEC Form 4 clickable link if available
-if "Form 4 Link" in df.columns:
-    df["SEC Filing"] = df["Form 4 Link"].apply(
-        lambda url: f"[View Filing]({url})" if pd.notna(url) else ""
-    )
-    df.drop(columns=["Form 4 Link"], inplace=True)
-
-# Format numeric columns
+# Format numeric columns safely
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
@@ -44,6 +34,22 @@ def format_numeric_columns(df):
     return df
 
 df = format_numeric_columns(df)
+
+# Drop unwanted columns
+if "X" in df.columns:
+    df = df.drop(columns=["X"])
+
+# Add current price and change vs. filing
+if "Ticker" in df.columns and "Price" in df.columns:
+    def get_current_price(ticker):
+        try:
+            return yf.Ticker(ticker).info.get("currentPrice", None)
+        except:
+            return None
+
+    df["Current Price"] = df["Ticker"].apply(get_current_price)
+    df["Price"] = pd.to_numeric(df["Price"].str.replace("$", ""), errors='coerce')
+    df["Price Change (%)"] = ((df["Current Price"] - df["Price"]) / df["Price"] * 100).round(2)
 
 # Sidebar: search filter
 st.sidebar.header("🔍 Filter Options")
@@ -71,20 +77,23 @@ with st.expander("ℹ️ What do these columns mean?"):
 - **Insider Name**: Person who made the trade.
 - **Title**: Role of the insider (e.g., Director, CEO, 10% Owner).
 - **Trade Type**: P = Purchase, S = Sale.
-- **Price**: Price per share.
+- **Price**: Price per share at the time of the trade.
+- **Current Price**: Latest stock price pulled from Yahoo Finance.
+- **Price Change (%)**: Percent difference between filing and current price.
 - **Qty**: Number of shares traded.
 - **Owned**: Insider’s total holdings after the trade.
 - **ΔOwn**: Ownership percentage change.
 - **Value**: Total value of the trade in USD.
-- **SEC Filing**: Link to the original SEC Form 4 filing.
+- **Form 4 Link**: Link to the original SEC filing.
 """)
 
-# Main Table
+# Main table
 st.dataframe(df, use_container_width=True)
 
 # Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
+
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
@@ -126,7 +135,6 @@ if "Value" in df.columns:
 
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
-
 
 
 
