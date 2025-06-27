@@ -65,7 +65,18 @@ with st.expander("ℹ️ What do these columns mean?"):
 """)
 
 # Main table
-st.dataframe(df, use_container_width=True)
+if search:
+    st.subheader(f"🔎 Search results for '{search}'")
+    st.dataframe(df, use_container_width=True)
+else:
+    st.subheader("🔥 Top Insider Trades (by value)")
+    top_df = df.copy()
+    if "Value" in top_df.columns:
+        top_df["Value"] = top_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
+        top_df["Value"] = pd.to_numeric(top_df["Value"], errors='coerce')
+        top_df = top_df.sort_values(by="Value", ascending=False).dropna(subset=["Value"]).head(10)
+    st.dataframe(top_df, use_container_width=True)
+
 
 # Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
