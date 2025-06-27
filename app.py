@@ -19,11 +19,18 @@ if df.empty:
     st.warning("⚠️ No insider trades found in the past day.")
     st.stop()
 
-# Remove "X" column if exists
+# Remove X column if present
 if "X" in df.columns:
     df = df.drop(columns=["X"])
 
-# Format numeric columns safely
+# Add SEC Form 4 clickable link if available
+if "Form 4 Link" in df.columns:
+    df["SEC Filing"] = df["Form 4 Link"].apply(
+        lambda url: f"[View Filing]({url})" if pd.notna(url) else ""
+    )
+    df.drop(columns=["Form 4 Link"], inplace=True)
+
+# Format numeric columns
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
@@ -69,22 +76,13 @@ with st.expander("ℹ️ What do these columns mean?"):
 - **Owned**: Insider’s total holdings after the trade.
 - **ΔOwn**: Ownership percentage change.
 - **Value**: Total value of the trade in USD.
-- **Form 4 Link**: Direct link to the SEC Form 4 filing for more info.
+- **SEC Filing**: Link to the original SEC Form 4 filing.
 """)
 
-# Convert SEC Form 4 link to HTML for rendering
-def make_clickable(val):
-    return f'<a href="{val}" target="_blank">🔗 Form 4</a>' if pd.notnull(val) else ""
+# Main Table
+st.dataframe(df, use_container_width=True)
 
-# Display table with clickable Form 4 links
-display_df = df.copy()
-if "Form 4 Link" in df.columns:
-    display_df["Form 4 Link"] = display_df["Form 4 Link"].apply(make_clickable)
-
-st.write("### Insider Trades Table")
-st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
-
-# Altair chart for top trades
+# Optional: Altair chart for top 10 trades
 if "Value" in df.columns:
     chart_df = df.copy()
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
@@ -100,32 +98,35 @@ if "Value" in df.columns:
         "value": "Value"
     }
 
-    if None not in col_map.values():
+    if None in col_map.values():
+        st.warning("⚠️ One or more chart-required columns are missing. Chart will not render.")
+    else:
         chart_df = chart_df.sort_values(by="Value (USD)", ascending=False).head(10)
         for col in col_map.values():
             chart_df[col] = chart_df[col].astype(str).fillna("")
 
-        chart = alt.Chart(chart_df).mark_bar().encode(
-            x=alt.X(f'{col_map["company"]}:N', sort='-y'),
-            y='Value (USD):Q',
-            color=f'{col_map["ticker"]}:N',
-            tooltip=[
-                col_map["company"],
-                col_map["insider"],
-                col_map["type"],
-                col_map["qty"],
-                col_map["value"]
-            ]
-        ).properties(
-            title='Top 10 Insider Trades by Value',
-            width=800,
-            height=400
-        )
-        st.altair_chart(chart, use_container_width=True)
+        try:
+            top_chart = alt.Chart(chart_df).mark_bar().encode(
+                x=alt.X(f'{col_map["company"]}:N', sort='-y'),
+                y='Value (USD):Q',
+                color=f'{col_map["ticker"]}:N',
+                tooltip=[
+                    col_map["company"],
+                    col_map["insider"],
+                    col_map["type"],
+                    col_map["qty"],
+                    col_map["value"]
+                ]
+            ).properties(
+                title='Top 10 Insider Trades by Value',
+                width=800,
+                height=400
+            )
+            st.altair_chart(top_chart, use_container_width=True)
 
-# Download button
-csv_download = df.copy()
-st.download_button("📥 Download CSV", csv_download.to_csv(index=False), file_name="insider_trades.csv")
+        except Exception as e:
+            st.error(f"📉 Chart rendering failed: {e}")
+
 
 
 
