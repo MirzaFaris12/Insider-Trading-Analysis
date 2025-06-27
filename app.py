@@ -17,9 +17,6 @@ with st.spinner("🔄 Fetching insider trading data..."):
 # If no data is found
 if df.empty:
     st.warning("⚠️ No insider trades found for the selected filters or date range.")
-else:
-    st.dataframe(df, use_container_width=True)
-
 
 # Remove X column if present
 if "X" in df.columns:
