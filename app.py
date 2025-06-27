@@ -64,6 +64,47 @@ if search:
     else:
         st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
 
+# --- Smart Money Tracker ---
+with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
+
+    if all(col in df.columns for col in ["Insider Name", "Trade Type", "Price", "Ticker"]):
+        smart_df = df[df["Trade Type"] == "P"].copy()
+
+        # Clean price and filter invalid
+        smart_df["Price"] = smart_df["Price"].replace('[\$,]', '', regex=True).replace(',', '', regex=True)
+        smart_df["Price"] = pd.to_numeric(smart_df["Price"], errors='coerce')
+        smart_df = smart_df.dropna(subset=["Price", "Ticker", "Insider Name"])
+        
+        # Fetch current prices
+        import yfinance as yf
+        tickers = smart_df["Ticker"].unique().tolist()
+        current_prices = {}
+
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                current_price = stock.history(period="1d")["Close"]
+                if not current_price.empty:
+                    current_prices[ticker] = current_price.iloc[-1]
+            except:
+                continue
+
+        # Compute gain %
+        def compute_gain(row):
+            current = current_prices.get(row["Ticker"], None)
+            if current is None or row["Price"] <= 0:
+                return None
+            return ((current - row["Price"]) / row["Price"]) * 100
+
+        smart_df["Gain (%)"] = smart_df.apply(compute_gain, axis=1)
+        smart_df = smart_df.dropna(subset=["Gain (%)"])
+
+        # Rank insiders
+        leaderboard = smart_df.groupby("Insider Name")["Gain (%)"].mean().sort_values(ascending=False).head(10)
+        st.dataframe(leaderboard.reset_index().rename(columns={"Gain (%)": "Avg Gain (%)"}), use_container_width=True)
+    else:
+        st.warning("❗ Required columns missing to compute Smart Money Tracker.")
+
 # Timestamp
 st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
