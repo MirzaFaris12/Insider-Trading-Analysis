@@ -3,12 +3,13 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 class InsiderScraper:
+    
     def __init__(self, min_transaction_value=0, min_shares=0):
         self.base_url = "http://openinsider.com"
-        self.url = f"{self.base_url}/screener?s=&o=&pl=&ph=&ll=&lh=&fd=3&td=0&sic1=&sic2=&t=&ql=&qh=&o1=0&o2=0&nop=50"
+        self.url = f"{self.base_url}/screener?fd=3&td=0&nop=50"
         self.min_transaction_value = min_transaction_value
         self.min_shares = min_shares
-        
+
     def fetch(self) -> pd.DataFrame:
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(self.url, headers=headers)
