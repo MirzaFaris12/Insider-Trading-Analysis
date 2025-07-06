@@ -64,6 +64,24 @@ if search:
             df["Ticker"].astype(str).str.contains(search, case=False) |
             df[company_col].astype(str).str.contains(search, case=False)
         ]
+# --- Repeat Buyer Flag ---
+if all(col in df.columns for col in ["Insider Name", "Ticker", "Trade Date"]):
+    try:
+        df["Trade Date"] = pd.to_datetime(df["Trade Date"], errors="coerce")
+        cutoff_date = datetime.now() - pd.Timedelta(days=30)
+
+        repeat_counts = (
+            df[df["Trade Date"] >= cutoff_date]
+            .groupby(["Insider Name", "Ticker"])["Trade Date"]
+            .count()
+        )
+
+        repeated_pairs = repeat_counts[repeat_counts >= 2].index
+        df["🔁 Repeat Buyer"] = df.apply(
+            lambda row: "✅" if (row["Insider Name"], row["Ticker"]) in repeated_pairs else "", axis=1
+        )
+    except Exception as e:
+        st.warning(f"Repeat Buyer flagging failed: {e}")
 
 # --- Smart Money Tracker ---
 with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
