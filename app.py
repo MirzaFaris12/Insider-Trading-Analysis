@@ -1,7 +1,7 @@
 import streamlit as st
 from insider_scraper import InsiderScraper
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import altair as alt
 import yfinance as yf
 
@@ -93,7 +93,7 @@ st.dataframe(df, use_container_width=True)
 # Altair Chart for Top Trades by Value
 if "Value" in df.columns:
     chart_df = df.copy()
-    chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True)
+    chart_df["Value (USD)"] = chart_df["Value"].replace('[\\$,]', '', regex=True)
     chart_df["Value (USD)"] = pd.to_numeric(chart_df["Value (USD)"], errors='coerce')
     chart_df = chart_df.dropna(subset=["Value (USD)"])
 
@@ -133,6 +133,38 @@ if "Value" in df.columns:
             st.altair_chart(top_chart, use_container_width=True)
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
+
+# Insider Win Rate Feature
+with st.expander("🧠 Insider Win Rate (30-day Gain Frequency)"):
+    if all(col in df.columns for col in ["Insider Name", "Ticker", "Price"]):
+        win_df = df[df["Trade Type"].str.startswith("P")].copy()
+        win_df["Price"] = pd.to_numeric(win_df["Price"].replace("$", "").replace(",", ""), errors='coerce')
+        win_df = win_df.dropna(subset=["Price", "Ticker", "Insider Name"])
+
+        win_counts = []
+        for idx, row in win_df.iterrows():
+            ticker = row["Ticker"]
+            price_at_trade = row["Price"]
+            try:
+                hist = yf.Ticker(ticker).history(period="30d")
+                if not hist.empty:
+                    price_after_30d = hist["Close"].iloc[-1]
+                    win = price_after_30d > price_at_trade
+                    win_counts.append((row["Insider Name"], win))
+            except:
+                continue
+
+        if win_counts:
+            win_df_summary = pd.DataFrame(win_counts, columns=["Insider", "Win"])
+            stats = win_df_summary.groupby("Insider")["Win"].agg(["sum", "count"])
+            stats["Win Rate (%)"] = (stats["sum"] / stats["count"] * 100).round(2)
+            stats = stats.rename(columns={"sum": "Wins", "count": "Total Trades"})
+            stats = stats.sort_values(by="Win Rate (%)", ascending=False).head(10)
+            st.dataframe(stats.reset_index(), use_container_width=True)
+        else:
+            st.info("No valid win rate data available for the selected period.")
+    else:
+        st.warning("❗ Required columns missing to compute Insider Win Rate.")
 
 
 
