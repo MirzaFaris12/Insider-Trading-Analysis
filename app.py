@@ -1,5 +1,6 @@
 import streamlit as st
 from insider_scraper import InsiderScraper
+from sec_form4 import SECForm4Fetcher
 import pandas as pd
 from datetime import datetime, timedelta
 import altair as alt
@@ -64,6 +65,28 @@ if search:
             df["Ticker"].astype(str).str.contains(search, case=False) |
             df[company_col].astype(str).str.contains(search, case=False)
         ]
+
+with st.expander("📄 SEC Form 4 Viewer"):
+    st.markdown("Fetch recent insider trades filed directly with the SEC.")
+
+    ticker_input = st.text_input("Enter stock ticker (e.g., AAPL, TSLA):")
+    if ticker_input:
+        fetcher = SECForm4Fetcher()
+        cik = fetcher.get_cik_from_ticker(ticker_input)
+        if cik:
+            filing_urls = fetcher.fetch_recent_form4_filings(cik)
+            if filing_urls:
+                selected = st.selectbox("Select a Form 4 filing", filing_urls)
+                form_df = fetcher.parse_form4_xml(selected)
+                if not form_df.empty:
+                    st.dataframe(form_df)
+                else:
+                    st.warning("⚠️ Could not parse data from selected Form 4.")
+            else:
+                st.warning("⚠️ No recent Form 4 filings found.")
+        else:
+            st.error("❌ CIK not found for the ticker.")
+
 
 # Timestamp
 st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -134,38 +157,7 @@ if "Value" in df.columns:
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
 
-# Insider Win Rate Feature
-with st.expander("🧠 Insider Win Rate (30-day Gain Frequency)"):
-    if all(col in df.columns for col in ["Insider Name", "Ticker", "Price"]):
-        win_df = df[df["Trade Type"].str.startswith("P")].copy()
-        win_df["Price"] = pd.to_numeric(win_df["Price"].replace("$", "").replace(",", ""), errors='coerce')
-        win_df = win_df.dropna(subset=["Price", "Ticker", "Insider Name"])
-
-        win_counts = []
-        for idx, row in win_df.iterrows():
-            ticker = row["Ticker"]
-            price_at_trade = row["Price"]
-            try:
-                hist = yf.Ticker(ticker).history(period="30d")
-                if not hist.empty:
-                    price_after_30d = hist["Close"].iloc[-1]
-                    win = price_after_30d > price_at_trade
-                    win_counts.append((row["Insider Name"], win))
-            except:
-                continue
-
-        if win_counts:
-            win_df_summary = pd.DataFrame(win_counts, columns=["Insider", "Win"])
-            stats = win_df_summary.groupby("Insider")["Win"].agg(["sum", "count"])
-            stats["Win Rate (%)"] = (stats["sum"] / stats["count"] * 100).round(2)
-            stats = stats.rename(columns={"sum": "Wins", "count": "Total Trades"})
-            stats = stats.sort_values(by="Win Rate (%)", ascending=False).head(10)
-            st.dataframe(stats.reset_index(), use_container_width=True)
-        else:
-            st.info("No valid win rate data available for the selected period.")
-    else:
-        st.warning("❗ Required columns missing to compute Insider Win Rate.")
-
+    
 
 
 
