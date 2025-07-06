@@ -22,6 +22,10 @@ class InsiderScraper:
 
         # Try finding any table, fallback if class doesn't work
         table = soup.find("table")  # Remove class filter
+        
+        print("DEBUG: Response status:", response.status_code)
+        print("DEBUG: First 500 characters of page:", soup.prettify()[:500])
+
 
         if table is None:
             print("DEBUG: Table not found. Printing first 1000 chars of page:\n")
