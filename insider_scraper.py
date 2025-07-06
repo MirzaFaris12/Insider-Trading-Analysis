@@ -8,37 +8,41 @@ class InsiderScraper:
         self.url = f"{self.base_url}/screener?s=&o=&pl=&ph=&ll=&lh=&fd=1&td=0&sic1=&sic2=&t=&ql=&qh=&o1=0&o2=0&nop=50"
         self.min_transaction_value = min_transaction_value
         self.min_shares = min_shares
-
+        
     def fetch(self) -> pd.DataFrame:
-        response = requests.get(self.url)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(self.url, headers=headers)
+
+        if response.status_code != 200:
+            print(f"DEBUG: Failed to fetch page. Status: {response.status_code}")
+            return pd.DataFrame()
+
         soup = BeautifulSoup(response.content, "html.parser")
-        table = soup.find("table", {"class": "tinytable"})
+
+        # Try finding any table, fallback if class doesn't work
+        table = soup.find("table")  # Remove class filter
 
         if table is None:
-            raise ValueError("Could not find data table on OpenInsider.")
+            print("DEBUG: Table not found. Printing first 1000 chars of page:\n")
+            print(soup.prettify()[:1000])
+            return pd.DataFrame()
 
-        # Get table headers (ignore icon columns or blank columns)
-        headers = [th.get_text(strip=True) for th in table.find_all("th") if th.get_text(strip=True) != '']
+        headers = [th.get_text(strip=True) for th in table.find_all("th") if th.get_text(strip=True)]
         data = []
 
         for row in table.find_all("tr")[1:]:
             cols = row.find_all("td")
-            row_data = []
-
-        for col in cols:
-            cell_text = col.get_text(strip=True)
-            row_data.append(cell_text)
-
-        # Only include rows that have same number of cells as headers
+            row_data = [td.get_text(strip=True) for td in cols]
         if len(row_data) == len(headers):
             data.append(row_data)
 
         if not data:
-            return pd.DataFrame()  # empty df fallback
+            print("DEBUG: Table was found, but no data rows matched.")
+            return pd.DataFrame()
 
-        df = pd.DataFrame(data, columns=headers)
-        df = self.clean_data(df)
-        return df
+    df = pd.DataFrame(data, columns=headers)
+    df = self.clean_data(df)
+    return df
 
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
