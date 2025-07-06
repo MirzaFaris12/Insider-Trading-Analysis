@@ -17,19 +17,29 @@ class InsiderScraper:
         if table is None:
             raise ValueError("Could not find data table on OpenInsider.")
 
-        headers = [th.text.strip() for th in table.find_all("th")]
+        # Get table headers (ignore icon columns or blank columns)
+        headers = [th.get_text(strip=True) for th in table.find_all("th") if th.get_text(strip=True) != '']
         data = []
 
         for row in table.find_all("tr")[1:]:
             cols = row.find_all("td")
-            if len(cols) != len(headers):
-                continue
-            record = [td.text.strip() for td in cols]
-            data.append(record)
+            row_data = []
+
+        for col in cols:
+            cell_text = col.get_text(strip=True)
+            row_data.append(cell_text)
+
+        # Only include rows that have same number of cells as headers
+        if len(row_data) == len(headers):
+            data.append(row_data)
+
+        if not data:
+            return pd.DataFrame()  # empty df fallback
 
         df = pd.DataFrame(data, columns=headers)
         df = self.clean_data(df)
         return df
+
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         value_col = next((col for col in df.columns if "Value" in col), None)
