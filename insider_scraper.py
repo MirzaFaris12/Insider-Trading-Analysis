@@ -11,14 +11,23 @@ class InsiderScraper:
 
     def fetch(self) -> pd.DataFrame:
         response = requests.get(self.url)
+        if response.status_code != 200:
+            raise ConnectionError(f"Failed to fetch data from OpenInsider: {response.status_code}")
+
         soup = BeautifulSoup(response.content, "html.parser")
+    
+        # Try known table class
+        table = soup.find("table", {"class": "tinytable"})
+    
+        # Try fallback method if main table not found
+        if not table:
+            tables = soup.find_all("table")
+            for t in tables:
+                if "Filing Date" in t.text and "Trade Date" in t.text:
+                    table = t
+                    break
 
-        # Try multiple possible table class names in case OpenInsider changes their layout
-        table = soup.find("table", {"class": "tinytable"}) or soup.find("table", {"class": "screener-table"})
-
-        if table is None:
-            print("DEBUG: Table not found. First 500 chars of HTML:")
-            print(response.text[:500])
+        if not table:
             raise ValueError("Could not find data table on OpenInsider.")
 
         headers = [th.text.strip() for th in table.find_all("th")]
@@ -29,20 +38,19 @@ class InsiderScraper:
             if len(cols) != len(headers):
                 continue
 
-            record = [td.text.strip() for td in cols]
+        record = [td.text.strip() for td in cols]
 
-            # Extract Form 4 link
-            a_tag = cols[0].find("a")
-            form4_link = f"{self.base_url}{a_tag['href']}" if a_tag and 'href' in a_tag.attrs else None
-            record.append(form4_link)
+        # Extract Form 4 link from <a> in first column
+        a_tag = cols[0].find("a")
+        form4_link = f"{self.base_url}{a_tag['href']}" if a_tag and 'href' in a_tag.attrs else None
+        record.append(form4_link)
 
-            data.append(record)
+        data.append(record)
 
         headers.append("Form 4 Link")
         df = pd.DataFrame(data, columns=headers)
-        print(f"DEBUG: Fetched {len(df)} rows from OpenInsider.")
-        df = self.clean_data(df)
-        return df
+        return self.clean_data(df)
+
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         value_col = next((col for col in df.columns if "Value" in col), None)
