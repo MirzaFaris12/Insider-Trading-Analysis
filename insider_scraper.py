@@ -40,9 +40,9 @@ class InsiderScraper:
             print("DEBUG: Table was found, but no data rows matched.")
             return pd.DataFrame()
 
-    df = pd.DataFrame(data, columns=headers)
-    df = self.clean_data(df)
-    return df
+        df = pd.DataFrame(data, columns=headers)
+        df = self.clean_data(df)
+        return df
 
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
