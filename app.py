@@ -5,28 +5,27 @@ from datetime import datetime
 import altair as alt
 import yfinance as yf
 
-# Setup
+# Page Setup
 st.set_page_config(page_title="Insider Trading Tracker", layout="wide")
 st.title("📊 Insider Trading Tracker")
 st.markdown("Track insider trades from [OpenInsider](http://openinsider.com). Uses real-time SEC Form 4 data.")
 
-# Sidebar: controls
+# Sidebar Controls
 st.sidebar.header("🔧 Controls")
-lookback_days = st.sidebar.slider("Lookback period (days):", 1, 60, 30)
+lookback_days = st.sidebar.slider("Lookback period (days):", 1, 60, 7)
+search = st.sidebar.text_input("Search by Company or Ticker:")
 
-# Create scraper (no need to pass lookback_days here)
+# Load Data
 scraper = InsiderScraper()
-
-# Fetch data with dynamic lookback
 with st.spinner("🔄 Fetching insider trading data..."):
     df = scraper.fetch(lookback_days=lookback_days)
 
 # Handle empty results
 if df.empty:
-    st.warning(f"⚠️ No insider trades found in the past {lookback_days} day(s).")
+    st.warning("⚠️ No insider trades found in the selected period.")
     st.stop()
 
-# Format numeric columns
+# Format numeric columns safely
 def format_numeric_columns(df):
     for col in ["Qty", "Owned", "Value"]:
         if col in df.columns:
@@ -41,7 +40,7 @@ def format_numeric_columns(df):
 
 df = format_numeric_columns(df)
 
-# Drop unwanted column
+# Drop unwanted columns
 if "X" in df.columns:
     df = df.drop(columns=["X"])
 
@@ -57,7 +56,7 @@ if "Ticker" in df.columns and "Price" in df.columns:
     df["Price"] = pd.to_numeric(df["Price"].str.replace("$", ""), errors='coerce')
     df["Price Change (%)"] = ((df["Current Price"] - df["Price"]) / df["Price"] * 100).round(2)
 
-# Filter by search
+# Apply Search Filter
 if search:
     company_col = next((col for col in df.columns if "Company" in col), None)
     if company_col and "Ticker" in df.columns:
@@ -65,13 +64,12 @@ if search:
             df["Ticker"].astype(str).str.contains(search, case=False) |
             df[company_col].astype(str).str.contains(search, case=False)
         ]
-    else:
-        st.warning("⚠️ Search could not apply — missing 'Ticker' or 'Company' column.")
 
-# Smart Money Tracker
+# --- Smart Money Tracker ---
 with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
     if all(col in df.columns for col in ["Insider Name", "Trade Type", "Price", "Ticker"]):
         smart_df = df[df["Trade Type"].str.startswith("P")].copy()
+
         smart_df["Price"] = pd.to_numeric(smart_df["Price"].replace('[\$,]', '', regex=True), errors='coerce')
         smart_df = smart_df.dropna(subset=["Price", "Ticker", "Insider Name"])
 
@@ -79,7 +77,8 @@ with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
         current_prices = {}
         for ticker in tickers:
             try:
-                hist = yf.Ticker(ticker).history(period="1d")
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="1d")
                 if not hist.empty:
                     current_prices[ticker] = hist["Close"].iloc[-1]
             except:
@@ -102,7 +101,7 @@ with st.expander("🧠 Smart Money Tracker: Top Insiders by Avg Gain (%)"):
 # Timestamp
 st.caption(f"🕒 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Column Explanation
+# Tooltip explanation
 with st.expander("ℹ️ What do these columns mean?"):
     st.markdown("""
 - **Filing Date**: When the insider trade was reported to the SEC.
@@ -113,18 +112,18 @@ with st.expander("ℹ️ What do these columns mean?"):
 - **Title**: Role of the insider (e.g., Director, CEO, 10% Owner).
 - **Trade Type**: P = Purchase, S = Sale.
 - **Price**: Price per share at the time of the trade.
-- **Current Price**: Latest stock price from Yahoo Finance.
-- **Price Change (%)**: Change since filing.
-- **Qty**: Shares traded.
-- **Owned**: Insider’s total holdings after trade.
-- **ΔOwn**: Ownership % change.
-- **Value**: Total value of trade (USD).
+- **Current Price**: Latest stock price pulled from Yahoo Finance.
+- **Price Change (%)**: Percent difference between filing and current price.
+- **Qty**: Number of shares traded.
+- **Owned**: Insider’s total holdings after the trade.
+- **ΔOwn**: Ownership percentage change.
+- **Value**: Total value of the trade in USD.
 """)
 
-# Main Data Table
+# Display main data table
 st.dataframe(df, use_container_width=True)
 
-# Optional: Altair chart for top 10 trades by value
+# Altair Chart for Top Trades by Value
 if "Value" in df.columns:
     chart_df = df.copy()
     chart_df["Value (USD)"] = chart_df["Value"].replace('[\$,]', '', regex=True)
@@ -167,6 +166,7 @@ if "Value" in df.columns:
             st.altair_chart(top_chart, use_container_width=True)
         except Exception as e:
             st.error(f"📉 Chart rendering failed: {e}")
+
 
 
 
