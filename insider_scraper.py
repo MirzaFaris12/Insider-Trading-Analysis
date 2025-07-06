@@ -3,7 +3,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 class InsiderScraper:
-    def __init__(self, min_transaction_value=10000, min_shares=1000):
+    def __init__(self, min_transaction_value=0, min_shares=0):
         self.base_url = "http://openinsider.com"
         self.url = f"{self.base_url}/screener?s=&o=&pl=&ph=&ll=&lh=&fd=1&td=0&sic1=&sic2=&t=&ql=&qh=&o1=0&o2=0&nop=50"
         self.min_transaction_value = min_transaction_value
@@ -12,11 +12,14 @@ class InsiderScraper:
     def fetch(self) -> pd.DataFrame:
         response = requests.get(self.url)
         soup = BeautifulSoup(response.content, "html.parser")
-        table = soup.find("table", {"class": "tinytable"})
+
+        # Try multiple possible table class names in case OpenInsider changes their layout
+        table = soup.find("table", {"class": "tinytable"}) or soup.find("table", {"class": "screener-table"})
 
         if table is None:
-            print("DEBUG: No table found.")
-            return pd.DataFrame()  # Return empty DataFrame as fallback
+            print("DEBUG: Table not found. First 500 chars of HTML:")
+            print(response.text[:500])
+            raise ValueError("Could not find data table on OpenInsider.")
 
         headers = [th.text.strip() for th in table.find_all("th")]
         data = []
@@ -37,6 +40,7 @@ class InsiderScraper:
 
         headers.append("Form 4 Link")
         df = pd.DataFrame(data, columns=headers)
+        print(f"DEBUG: Fetched {len(df)} rows from OpenInsider.")
         df = self.clean_data(df)
         return df
 
@@ -57,5 +61,6 @@ class InsiderScraper:
             print("DEBUG: Error cleaning data:", e)
 
         return df.reset_index(drop=True)
+
 
 
