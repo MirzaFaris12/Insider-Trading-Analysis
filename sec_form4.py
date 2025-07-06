@@ -9,17 +9,20 @@ class SECForm4Fetcher:
         self.headers = {"User-Agent": "InsiderTradingTracker/1.0 contact@example.com"}  # Replace with real contact
 
     def get_cik_from_ticker(self, ticker):
-        url = "https://www.sec.gov/files/company_tickers_exchange.json"
+        url = "https://www.sec.gov/include/ticker.txt"
         try:
-            response = requests.get(url, headers=self.headers)
-            data = response.json()
-            for entry in data:
-                if entry["ticker"].lower() == ticker.lower():
-                    return str(entry["cik"]).zfill(10)
-                    
+            resp = requests.get(url, headers=self.headers)
+            lines = resp.text.strip().splitlines()
+            mapping = dict(line.split() for line in lines if len(line.split()) == 2)
+
+            cik = mapping.get(ticker.lower())
+        if cik:
+            return cik.zfill(10)
+        return None
         except Exception as e:
-            print("DEBUG: Failed to fetch CIK", e)
+            print("DEBUG: Failed to fetch CIK from ticker.txt:", e)
             return None
+
 
 
     def get_company_filings(self, cik: str, count: int = 10):
