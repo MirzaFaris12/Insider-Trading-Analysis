@@ -10,42 +10,35 @@ class InsiderScraper:
         self.min_shares = min_shares
 
     def fetch(self) -> pd.DataFrame:
-        try:
-            response = requests.get(self.url, headers={"User-Agent": "Mozilla/5.0"})
-            if response.status_code != 200:
-                raise ValueError(f"Failed to fetch data. Status code: {response.status_code}")
+        response = requests.get(self.url)
+        soup = BeautifulSoup(response.content, "html.parser")
+        table = soup.find("table", {"class": "tinytable"})
 
-            soup = BeautifulSoup(response.content, "html.parser")
-            table = soup.find("table", class_="tinytable")
+        if table is None:
+            print("DEBUG: No table found.")
+            return pd.DataFrame()  # Return empty DataFrame as fallback
 
-            if not table:
-                raise ValueError("Could not find data table on OpenInsider. The structure may have changed.")
+        headers = [th.text.strip() for th in table.find_all("th")]
+        data = []
 
-            headers = [th.text.strip() for th in table.find_all("th")]
-            data = []
+        for row in table.find_all("tr")[1:]:
+            cols = row.find_all("td")
+            if len(cols) != len(headers):
+                continue
 
-            for row in table.find_all("tr")[1:]:
-                cols = row.find_all("td")
-                if len(cols) != len(headers):
-                    continue
-                record = [td.text.strip() for td in cols]
+            record = [td.text.strip() for td in cols]
 
-                # Try to extract Form 4 link
-                a_tag = cols[0].find("a")
-                form4_link = f"{self.base_url}{a_tag['href']}" if a_tag and 'href' in a_tag.attrs else None
-                record.append(form4_link)
+            # Extract Form 4 link
+            a_tag = cols[0].find("a")
+            form4_link = f"{self.base_url}{a_tag['href']}" if a_tag and 'href' in a_tag.attrs else None
+            record.append(form4_link)
 
-                data.append(record)
+            data.append(record)
 
         headers.append("Form 4 Link")
         df = pd.DataFrame(data, columns=headers)
         df = self.clean_data(df)
         return df
-
-        except Exception as e:
-            print("DEBUG: Exception occurred during fetch →", e)
-            return pd.DataFrame()  # Return empty DataFrame to avoid crashing the app
-
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         value_col = next((col for col in df.columns if "Value" in col), None)
