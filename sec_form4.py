@@ -8,9 +8,18 @@ class SECForm4Fetcher:
         self.base_url = "https://data.sec.gov"
         self.headers = {"User-Agent": "InsiderTradingTracker/1.0 contact@example.com"}  # Replace with real contact
 
-    def get_recent_ciks(self, days=7):
-        """Optional: Placeholder to fetch list of recent CIKs from insider trades."""
-        pass  # Can be implemented later
+    def get_cik_from_ticker(self, ticker):
+        url = "https://www.sec.gov/files/company_tickers_exchange.json"
+        try:
+            response = requests.get(url, headers=self.headers)
+            data = response.json()
+            for entry in data:
+                if entry["ticker"].lower() == ticker.lower():
+                return str(entry["cik"]).zfill(10)
+        except Exception as e:
+            print("DEBUG: Failed to fetch CIK", e)
+            return None
+
 
     def get_company_filings(self, cik: str, count: int = 10):
         cik = cik.zfill(10)
