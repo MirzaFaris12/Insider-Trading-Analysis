@@ -18,12 +18,10 @@ class SECForm4Fetcher:
             cik = mapping.get(ticker.lower())
         if cik:
             return cik.zfill(10)
-        return None
+            return None
         except Exception as e:
             print("DEBUG: Failed to fetch CIK from ticker.txt:", e)
             return None
-
-
 
     def get_company_filings(self, cik: str, count: int = 10):
         cik = cik.zfill(10)
