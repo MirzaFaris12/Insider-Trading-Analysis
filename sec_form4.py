@@ -55,39 +55,50 @@ class SECForm4Fetcher:
         url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession}/primary_doc.xml"
         r = requests.get(url, headers=self.headers)
         if r.status_code != 200:
-            return None
+            print(f"⚠️ Could not fetch XML for CIK {cik}, Accession {accession}")
+            return pd.DataFrame()
 
-        root = ET.fromstring(r.content)
+        try:
+            root = ET.fromstring(r.content)
+        except ET.ParseError as e:
+            print("⚠️ XML parsing failed:", e)
+            return pd.DataFrame()
+
         records = []
 
-        # Extract reporter name once
-        try:
-            name = root.findtext(".//reportingOwnerId/rptOwnerName")
-        except:
-            name = "Unknown"
-
-        # Parse transactions
+        # Extract reporter name
+        name = root.findtext(".//reportingOwnerId/rptOwnerName", default="Unknown")
+    
+        # Try parsing non-derivative transactions
         for txn in root.findall(".//nonDerivativeTransaction"):
             try:
-                security = txn.findtext(".//securityTitle/value", default="")
-                date = txn.findtext(".//transactionDate/value", default="")
-                code = txn.findtext(".//transactionCoding/transactionCode", default="")
-                shares = txn.findtext(".//transactionAmounts/transactionShares/value", default="0")
-                price = txn.findtext(".//transactionAmounts/transactionPricePerShare/value", default="0")
-
                 records.append({
                     "Insider Name": name,
-                    "Security": security,
-                    "Date": date,
-                    "Type": code,
-                    "Shares": float(shares.replace(",", "")),
-                    "Price": float(price.replace(",", ""))
+                    "Security": txn.findtext(".//securityTitle/value", default=""),
+                    "Date": txn.findtext(".//transactionDate/value", default=""),
+                    "Type": txn.findtext(".//transactionCoding/transactionCode", default=""),
+                    "Shares": float(txn.findtext(".//transactionAmounts/transactionShares/value", default="0").replace(",", "")),
+                    "Price": float(txn.findtext(".//transactionAmounts/transactionPricePerShare/value", default="0").replace(",", ""))
                 })
             except Exception as e:
-                print("DEBUG: Transaction parse failed:", e)
-                continue
+                print("⚠️ Non-derivative txn parse failed:", e)
+
+        # Try parsing derivative transactions as fallback
+        for txn in root.findall(".//derivativeTransaction"):
+            try:
+                records.append({
+                    "Insider Name": name,
+                    "Security": txn.findtext(".//securityTitle/value", default=""),
+                    "Date": txn.findtext(".//transactionDate/value", default=""),
+                    "Type": txn.findtext(".//transactionCoding/transactionCode", default=""),
+                    "Shares": float(txn.findtext(".//transactionAmounts/transactionShares/value", default="0").replace(",", "")),
+                    "Price": float(txn.findtext(".//transactionAmounts/transactionPricePerShare/value", default="0").replace(",", ""))
+                })
+            except Exception as e:
+                print("⚠️ Derivative txn parse failed:", e)
 
         return pd.DataFrame(records)
+
 
 
 # Example usage
