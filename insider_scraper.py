@@ -1,80 +1,62 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-import time
 
 class InsiderScraper:
-
-    def __init__(self, min_transaction_value=0, min_shares=0, lookback_days=30):
+    def __init__(self, min_transaction_value=0, min_shares=0):
         self.base_url = "http://openinsider.com"
-        self.lookback_days = lookback_days
-        self.url = (
-            f"{self.base_url}/screener?s=&o=&pl=&ph=&ll=&lh="
-            f"&fd={self.lookback_days}&td=0&sic1=&sic2=&t=&ql=&qh="
-            f"&o1=0&o2=0&nop=50"
-        )
         self.min_transaction_value = min_transaction_value
         self.min_shares = min_shares
 
-    def fetch(self) -> pd.DataFrame:
+    def fetch(self, lookback_days=5) -> pd.DataFrame:
+        url = (
+            f"{self.base_url}/screener?s=&o=&pl=&ph=&ll=&lh=&fd={lookback_days}&td=0"
+            f"&sic1=&sic2=&t=&ql=&qh=&o1=0&o2=0&nop=50"
+        )
+
         headers = {
             "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Referer": "https://google.com/",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1"
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/114.0.0.0 Safari/537.36"
+            )
         }
 
-        try:
-            response = requests.get(self.url, headers=headers, timeout=15)
-            if response.status_code != 200:
-                print(f"DEBUG: Failed to fetch page. Status: {response.status_code}")
-                return pd.DataFrame()
-
-            soup = BeautifulSoup(response.content, "html.parser")
-
-            if "google_vignette" in response.url or "OpenInsider" not in soup.text:
-                print("DEBUG: Interstitial page or bot blocker detected. Try again later.")
-                return pd.DataFrame()
-
-            table = soup.find("table")
-            if table is None:
-                print("DEBUG: Table not found. Printing first 1000 chars of page:\n")
-                print(soup.prettify()[:1000])
-                return pd.DataFrame()
-
-            headers = [th.get_text(strip=True) for th in table.find_all("th") if th.get_text(strip=True)]
-            data = []
-
-            for row in table.find_all("tr")[1:]:
-                cols = row.find_all("td")
-                row_data = [td.get_text(strip=True) for td in cols]
-                if len(row_data) == len(headers):
-                    data.append(row_data)
-
-            if not data:
-                print("DEBUG: Table found but no data rows matched.")
-                return pd.DataFrame()
-
-            df = pd.DataFrame(data, columns=headers)
-            df = self.clean_data(df)
-            return df
-
-        except Exception as e:
-            print(f"DEBUG: Exception occurred during fetch: {e}")
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            print("DEBUG: Request failed with status:", response.status_code)
             return pd.DataFrame()
+
+        soup = BeautifulSoup(response.content, "html.parser")
+        table = soup.find("table", class_="tinytable")
+
+        if table is None:
+            print("DEBUG: Data table not found on OpenInsider page.")
+            return pd.DataFrame()
+
+        headers = [th.get_text(strip=True) for th in table.find_all("th") if th.get_text(strip=True)]
+        data = []
+
+        for row in table.find_all("tr")[1:]:
+            cols = row.find_all("td")
+            row_data = [td.get_text(strip=True) for td in cols]
+            if len(row_data) == len(headers):
+                data.append(row_data)
+
+        if not data:
+            print("DEBUG: Table found, but no matching data rows.")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data, columns=headers)
+        df = self.clean_data(df)
+        return df
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         value_col = next((col for col in df.columns if "Value" in col), None)
         qty_col = next((col for col in df.columns if "Qty" in col or "Shares" in col), None)
 
         if not value_col or not qty_col:
-            print("DEBUG: Column names not found for Value or Qty.")
+            print("DEBUG: Missing required columns for filtering.")
             return df
 
         try:
