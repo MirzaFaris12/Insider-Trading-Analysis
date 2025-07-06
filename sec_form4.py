@@ -15,7 +15,8 @@ class SECForm4Fetcher:
             data = response.json()
             for entry in data:
                 if entry["ticker"].lower() == ticker.lower():
-                return str(entry["cik"]).zfill(10)
+                    return str(entry["cik"]).zfill(10)
+                    
         except Exception as e:
             print("DEBUG: Failed to fetch CIK", e)
             return None
