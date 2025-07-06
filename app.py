@@ -12,8 +12,10 @@ st.markdown("Track insider trades from [OpenInsider](http://openinsider.com). Us
 
 # Sidebar: controls
 st.sidebar.header("🔧 Controls")
-lookback_days = st.sidebar.slider("Lookback period (days):", 1, 60, 30)
-search = st.sidebar.text_input("Search by Company or Ticker:")
+lookback = st.sidebar.slider("Lookback period (days):", 1, 60, 30)
+scraper = InsiderScraper()
+df = scraper.fetch(lookback_days=lookback)
+
 
 # Load data
 scraper = InsiderScraper(lookback_days=lookback_days)
