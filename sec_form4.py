@@ -58,35 +58,37 @@ class SECForm4Fetcher:
             return None
 
         root = ET.fromstring(r.content)
-        ns = {"ns": "http://www.sec.gov/edgar/document/thirteenf/informationtable"}
-
         records = []
 
-        for report in root.findall("reportingOwner"):  # Simplified for early version
-            try:
-                name = report.find("reportingOwnerId/rptOwnerName").text
-            except:
-                name = ""
+        # Extract reporter name once
+        try:
+            name = root.findtext(".//reportingOwnerId/rptOwnerName")
+        except:
+            name = "Unknown"
 
-        for txn in root.findall("nonDerivativeTable/nonDerivativeTransaction"):
+        # Parse transactions
+        for txn in root.findall(".//nonDerivativeTransaction"):
             try:
-                security = txn.find("securityTitle/value").text
-                date = txn.find("transactionDate/value").text
-                code = txn.find("transactionCoding/transactionCode").text
-                shares = txn.find("transactionAmounts/transactionShares/value").text
-                price = txn.find("transactionAmounts/transactionPricePerShare/value").text
+                security = txn.findtext(".//securityTitle/value", default="")
+                date = txn.findtext(".//transactionDate/value", default="")
+                code = txn.findtext(".//transactionCoding/transactionCode", default="")
+                shares = txn.findtext(".//transactionAmounts/transactionShares/value", default="0")
+                price = txn.findtext(".//transactionAmounts/transactionPricePerShare/value", default="0")
+
                 records.append({
                     "Insider Name": name,
                     "Security": security,
                     "Date": date,
                     "Type": code,
-                    "Shares": float(shares),
-                    "Price": float(price)
+                    "Shares": float(shares.replace(",", "")),
+                    "Price": float(price.replace(",", ""))
                 })
             except Exception as e:
+                print("DEBUG: Transaction parse failed:", e)
                 continue
 
         return pd.DataFrame(records)
+
 
 # Example usage
 # fetcher = SECForm4Fetcher()
