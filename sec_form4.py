@@ -16,9 +16,10 @@ class SECForm4Fetcher:
             mapping = dict(line.split() for line in lines if len(line.split()) == 2)
 
             cik = mapping.get(ticker.lower())
-        if cik:
-            return cik.zfill(10)
+            if cik:
+                return cik.zfill(10)
             return None
+        
         except Exception as e:
             print("DEBUG: Failed to fetch CIK from ticker.txt:", e)
             return None
