@@ -65,27 +65,24 @@ if search:
             df["Ticker"].astype(str).str.contains(search, case=False) |
             df[company_col].astype(str).str.contains(search, case=False)
         ]
-
 with st.expander("📄 SEC Form 4 Viewer"):
     st.markdown("Fetch recent insider trades filed directly with the SEC.")
-
     ticker_input = st.text_input("Enter stock ticker (e.g., AAPL, TSLA):")
+
     if ticker_input:
         fetcher = SECForm4Fetcher()
         cik = fetcher.get_cik_from_ticker(ticker_input)
-        if cik:
-            filing_urls = fetcher.fetch_recent_form4_filings(cik)
-            if filing_urls:
-                selected = st.selectbox("Select a Form 4 filing", filing_urls)
-                form_df = fetcher.parse_form4_xml(selected)
-                if not form_df.empty:
-                    st.dataframe(form_df)
-                else:
-                    st.warning("⚠️ Could not parse data from selected Form 4.")
-            else:
-                st.warning("⚠️ No recent Form 4 filings found.")
-        else:
+        if not cik:
             st.error("❌ CIK not found for the ticker.")
+        else:
+            filings = fetcher.get_company_filings(cik)
+            if filings:
+                selected = filings[0]  # You can build a dropdown from multiple filings
+                df_sec = fetcher.parse_form4(cik, selected["accession"])
+                st.success(f"Showing Form 4 filed on {selected['filed']}")
+                st.dataframe(df_sec)
+            else:
+                st.warning("No recent Form 4 filings found.")
 
 
 # Timestamp
